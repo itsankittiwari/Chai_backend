@@ -17,4 +17,12 @@ app.use(express.urlencoded({extended:true,limit:"16kb"}))
 app.use(express.static("public"))// for storing the files in our local public folder
 app.use(cookieParser())
 
+
+//rotes import 
+import userRouter from './routes/user.routes.js'
+
+
+//routes declaration 
+app.use("api/v1/users",userRouter)
+
 export {app}
