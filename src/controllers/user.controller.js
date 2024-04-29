@@ -2,6 +2,7 @@ import {asyncHandler} from "../utils/asyncHandler.js";
 import {ApiError} from "../utils/ApiError.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
+import {User} from "../models/user.moel.js"
 
 const registerUser = asyncHandler(async (req,res) =>{
   // gets user details from frontend 
@@ -21,7 +22,7 @@ const registerUser = asyncHandler(async (req,res) =>{
     throw new ApiError(400,"All fields are required ")
   }
     // check if user already exists: username, email
-    const existedUser = User.findOne({
+    const existedUser = await User.findOne({
       $or: [{ username }, { email }]
     })
 
@@ -35,13 +36,14 @@ const registerUser = asyncHandler(async (req,res) =>{
     const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
     if(!avatarLocalPath){
-      throw new ApiError(400,"Avatar file is required")
+      throw new ApiError(400,"avatar file is required")
     }
+ 
 
  // upload them to cloudinary , avatar 
     const avatar = await uploadOnCloudinary(avatarLocalPath);
     const coverImage = await uploadOnCloudinary(coverImageLocalPath)
-
+     console.log(avatar)
     if(!avatar){
       throw new ApiError(400,"Avatar file is required")
     }
@@ -59,7 +61,7 @@ const registerUser = asyncHandler(async (req,res) =>{
 
     // remove password and refresh token field from response 
     const createdUser = await User.findById(user._id).select(
-      "-password" -"refreshToken"
+      "-password -refreshToken"
     )
     // check for user creation 
 
