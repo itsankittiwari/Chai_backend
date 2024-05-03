@@ -47,56 +47,54 @@ const registerUser = asyncHandler(async (req, res) => {
   // check if user already exists: username, email
   const existedUser = await User.findOne({
     $or: [{ username }, { email }]
-  });
+  })
 
   if (existedUser) {
     throw new ApiError(409, "User with email or username already exists");
   }
 
   //multer gives the file access like express give us req.body 
-  const avatarFile = req.files?.avatar;
-  const coverImageFile = req.files?.coverImage;
+  const avatarLocalPath = req.files?.avatar[0]?.path;
+  //const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
-  // check for images , check for avatar 
-  if (!avatarFile || !avatarFile[0]?.path) {
-    throw new ApiError(400, "Avatar file is required");
+  let coverImageLocalPath;
+  if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+      coverImageLocalPath = req.files.coverImage[0].path
+  }
+  
+
+  if (!avatarLocalPath) {
+      throw new ApiError(400, "Avatar file is required")
   }
 
-  // upload avatar to cloudinary
-  const avatar = await uploadOnCloudinary(avatarFile[0].path);
+  const avatar = await uploadOnCloudinary(avatarLocalPath)
+  const coverImage = await uploadOnCloudinary(coverImageLocalPath)
 
   if (!avatar) {
-    throw new ApiError(500, "Failed to upload avatar image");
+      throw new ApiError(400, "Avatar file is required")
+  }
+ 
+
+  const user = await User.create({
+      fullName,
+      avatar: avatar.url,
+      coverImage: coverImage?.url || "",
+      email, 
+      password,
+      username: username.toLowerCase()
+  })
+
+  const createdUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+  )
+
+  if (!createdUser) {
+      throw new ApiError(500, "Something went wrong while registering the user")
   }
 
-  // upload cover image to cloudinary if exists
-  let coverImage = "";
-  if (coverImageFile && coverImageFile[0]?.path) {
-    coverImage = await uploadOnCloudinary(coverImageFile[0].path);
-    if (!coverImage) {
-      throw new ApiError(500, "Failed to upload cover image");
-    }
-  }
-
-  // create user object  - create entry in db 
-  const newUser = new User({
-    fullName,
-    avatar: avatar.url,
-    coverImage: coverImage ? coverImage.url : "", // If coverImage exists, use its URL, otherwise use empty string
-    email,
-    password,
-    username: username.toLowerCase()
-  });
-
-  const user = await newUser.save();
-
-  // remove password and refresh token field from response 
-  const { password: _, refreshToken: __, ...createdUser } = user.toObject();
-
-  // return response  
   return res.status(201).json(
-    new ApiResponse(200, createdUser, "User Registered Successfully")
-  );
+      new ApiResponse(200, createdUser, "User registered Successfully")
+  )
 });
 
 
@@ -109,7 +107,7 @@ const loginUser = asyncHandler(async (req, res) => {
   //send cookie
 
   const { email, username, password } = req.body
-  if (!username || !email) {
+  if (!username && !email) {
     throw new ApiError(400, "username or password is required")
   }
 
@@ -131,7 +129,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const loggedInUser = await User.findById(user._id).select("password -refreshToken")
 
-  const option ={
+  const options ={
     httpOnly: true,
     secure: true
   }
@@ -149,6 +147,28 @@ const loginUser = asyncHandler(async (req, res) => {
 
 
 const logoutUser = asyncHandler(async (req,res) =>{
+   await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $unset:{
+          refreshToken: 1 // this removes the field from document
+        }
+      },
+      {
+        new: true
+      }
+   )  
+
+   const options = {
+    httpOnly: true,
+    secure: true
+   }
+
+   return res 
+   .status(200)
+   .clearCookie("accessToken", options)
+   .clearCookie("refreshToken",options)
+   .json(new ApiResponse(200, {}, "User Logged Out"))
 
 })
 export {
